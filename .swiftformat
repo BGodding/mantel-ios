@@ -1,0 +1,22 @@
+# SwiftFormat — the ktlint/detekt-formatting analog.
+#   swiftformat --lint .     # report only (CI)
+#   swiftformat .            # apply
+#
+# SwiftFormat's default rule set, with only the "wrap every one-line body onto
+# its own line" family turned off — those add vertical noise without improving
+# readability for short guard/return bodies.
+
+--swiftversion 5.10
+--indent 4
+--importgrouping testable-bottom
+--self remove
+--stripunusedargs closure-only
+
+--exclude .build,DerivedData,Mantel.xcodeproj,Secrets,design
+
+--disable wrapMultilineStatementBraces
+--disable wrapFunctionBodies
+--disable wrapConditionalBodies
+--disable wrapLoopBodies
+--disable wrapIfStatementBodies
+--disable wrapPropertyBodies

@@ -1,0 +1,13 @@
+title = "Mantel iOS gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Generated / vendored paths that are not part of the source tree"
+paths = [
+  '''\.build/''',
+  '''DerivedData/''',
+  '''.*\.xcodeproj/''',
+  '''Package\.resolved$''',
+]

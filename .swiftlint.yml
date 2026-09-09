@@ -1,0 +1,77 @@
+# SwiftLint — the detekt analog for this repo.
+#   swiftlint --strict                                   # fail on any violation
+#   swiftlint analyze --compiler-log-path <build.log>    # whole-module rules
+
+disabled_rules:
+  # SwiftFormat keeps trailing commas on multi-line literals for clean diffs;
+  # let it own that call rather than fighting SwiftLint's opposite default.
+  - trailing_comma
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - first_where
+  - last_where
+  - contains_over_first_not_nil
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - collection_alignment
+  - closure_spacing
+  - explicit_init
+  - fatal_error_message
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - redundant_nil_coalescing
+  - toggle_bool
+  - unavailable_function
+  - unowned_variable_capture
+  - weak_delegate
+  - yoda_condition
+  - prefer_self_type_over_type_of_self
+  - sorted_first_last
+
+analyzer_rules:
+  - unused_declaration
+  - unused_import
+
+excluded:
+  - .build
+  - DerivedData
+  - Mantel.xcodeproj
+  - Secrets
+  - design
+
+line_length:
+  warning: 120
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
+
+identifier_name:
+  min_length: 2          # `id`, `px`, `os` are fine
+  excluded: [id, px, x, y]
+
+# Networking + upload state machines carry inherently branchy switch statements
+# (WebDAV status → outcome). 10 is too tight; 15 still catches genuine tangle.
+cyclomatic_complexity:
+  warning: 15
+  error: 25
+
+file_length:
+  warning: 500
+  error: 800
+
+type_body_length:
+  warning: 350
+  error: 500
+
+function_body_length:
+  warning: 60
+  error: 120
+
+# `URL(string: "<compile-time literal>")!` is idiomatic; flag the rest.
+force_unwrapping:
+  severity: warning
+
+implicitly_unwrapped_optional:
+  severity: warning

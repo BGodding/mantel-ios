@@ -1,0 +1,35 @@
+version: 2
+updates:
+  # Swift Package Manager — resolved graph is committed at
+  # Mantel.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+  # (the rest of the generated .xcodeproj stays git-ignored).
+  - package-ecosystem: "swift"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      firebase:
+        patterns:
+          - "Firebase*"
+          - "Google*"
+          - "abseil*"
+          - "gRPC*"
+          - "nanopb"
+          - "leveldb"
+          - "Promises"
+          - "SwiftProtobuf"
+          - "GTMSessionFetcher"
+          - "InteropForGoogle"
+          - "AppCheck"
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci"

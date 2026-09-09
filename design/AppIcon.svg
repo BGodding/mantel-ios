@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 108 108">
+  <defs>
+    <linearGradient id="bg" gradientUnits="userSpaceOnUse" x1="6" y1="6" x2="102" y2="102">
+      <stop offset="0" stop-color="#5B6CC7"/>
+      <stop offset="1" stop-color="#7A4FBF"/>
+    </linearGradient>
+    <radialGradient id="hi" gradientUnits="userSpaceOnUse" cx="30" cy="26" r="86">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sky" gradientUnits="userSpaceOnUse" x1="54" y1="30" x2="54" y2="58">
+      <stop offset="0" stop-color="#CBE6FF"/>
+      <stop offset="1" stop-color="#EAF5FF"/>
+    </linearGradient>
+    <clipPath id="opening">
+      <path d="M36,30 h36 a4,4 0 0 1 4,4 v20 a4,4 0 0 1 -4,4 h-36 a4,4 0 0 1 -4,-4 v-20 a4,4 0 0 1 4,-4 z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="108" height="108" fill="url(#bg)"/>
+  <rect x="0" y="0" width="108" height="108" fill="url(#hi)"/>
+
+  <!-- Foreground, scaled up around centre to match how Android masks the
+       adaptive icon (only the inner ~72/108 reads prominently). -->
+  <g transform="translate(54 55) scale(1.2) translate(-54 -54)">
+    <!-- Picture frame body -->
+    <path fill="#FFFFFF"
+          d="M35,24 h38 a9,9 0 0 1 9,9 v30 a9,9 0 0 1 -9,9 h-38 a9,9 0 0 1 -9,-9 v-30 a9,9 0 0 1 9,-9 z"/>
+
+    <!-- Photo scene, clipped to the frame opening -->
+    <g clip-path="url(#opening)">
+      <rect x="32" y="30" width="44" height="28" fill="url(#sky)"/>
+      <circle cx="65" cy="41" r="5.5" fill="#FFD24D"/>
+      <path fill="#3F51B5" d="M32,58 L44,42 L56,58 z"/>
+      <path fill="#23A594" d="M45,58 L60,44 L75,58 z"/>
+    </g>
+
+    <!-- Upload badge -->
+    <circle cx="60" cy="68" r="16.5" fill="#FFFFFF"/>
+    <circle cx="60" cy="68" r="13.5" fill="#12B39A"/>
+    <path fill="#FFFFFF"
+          d="M60,59 L69,68.5 L63.5,68.5 L63.5,77.5 L56.5,77.5 L56.5,68.5 L51,68.5 z"/>
+  </g>
+</svg>

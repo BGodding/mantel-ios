@@ -1,0 +1,31 @@
+# Xcode / xcodegen — the .xcodeproj is generated from project.yml
+*.xcodeproj/
+!project.yml
+xcuserdata/
+DerivedData/
+build/
+.build/
+*.xcworkspace/
+!*.xcworkspace/contents.xcworkspacedata
+
+# SPM — the root Package.swift + Package.resolved are committed as the Dependabot
+# manifest/lock pair (the app itself is built from project.yml, not this package).
+.swiftpm/
+/*.xcodeproj/**/Package.resolved
+
+# Firebase config — contains project identifiers. Each build environment supplies its own.
+GoogleService-Info.plist
+
+# Local deployment config (see Secrets/Secrets.example.plist) — never commit the real host
+Secrets/Secrets.plist
+
+# Release signing — never commit these
+*.p12
+*.mobileprovision
+ExportOptions.plist
+
+# Private design docs — kept locally, not published
+/docs/private/
+
+# macOS
+.DS_Store

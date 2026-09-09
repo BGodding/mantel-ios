@@ -1,0 +1,11 @@
+# Periphery — unused-code scan.
+#   periphery scan
+project: Mantel.xcodeproj
+schemes:
+  - Mantel
+targets:
+  - Mantel
+  - ShareExtension
+  - MantelTests
+retain_public: false
+# SwiftUI previews / Codable synthesised members / @main are retained automatically.

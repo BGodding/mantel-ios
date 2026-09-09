@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - run: brew install swiftlint swiftformat
+      - name: SwiftFormat (lint)
+        run: swiftformat --lint .
+      - name: SwiftLint (strict)
+        run: swiftlint lint --strict --config .swiftlint.yml
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - run: brew install xcodegen xcbeautify
+      - run: xcodegen generate
+      - name: Build & test
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Mantel.xcodeproj \
+            -scheme Mantel \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            CODE_SIGNING_ALLOWED=NO \
+            clean test | xcbeautify
+        env:
+          NSUnbufferedIO: YES
+
+  deadcode:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - run: brew install xcodegen peripheryapp/periphery/periphery
+      - run: xcodegen generate
+      - name: Periphery
+        run: periphery scan --strict
