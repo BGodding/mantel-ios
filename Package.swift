@@ -15,7 +15,7 @@ let package = Package(
     platforms: [.iOS(.v17)],
     dependencies: [
         // Matches `packages.Firebase.minorVersion` in project.yml (~> 11.6).
-        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", "11.6.0" ..< "11.7.0"),
+        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", "11.6.0" ..< "13.0.0"),
     ],
     targets: []
 )
