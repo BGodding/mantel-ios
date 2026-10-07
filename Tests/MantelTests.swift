@@ -167,8 +167,11 @@ final class MantelTests: XCTestCase {
 
         let app = UploadStore(fileURL: url)
         let extensionProcess = UploadStore(fileURL: url)
+        // `reload()` drains a store's queued writes, so each lands before the next process writes.
         app.upsert(record("a"))
+        app.reload()
         extensionProcess.upsert(record("b")) // the app's in-memory list doesn't know "b"
+        extensionProcess.reload()
 
         // The app mutates "a" from its stale snapshot — "b" must survive the write.
         app.mutate(id: "a") { $0.attempt = 3 }
