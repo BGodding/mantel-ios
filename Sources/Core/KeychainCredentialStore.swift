@@ -6,12 +6,17 @@ import Security
 ///
 /// The item is written to a shared keychain access group so the Share Extension
 /// can read the same credential the app stored. Protection class is
-/// `AfterFirstUnlock` so a background upload started from the extension can still
-/// read it while the screen is locked (mirrors the Android decision not to require
+/// `AfterFirstUnlockThisDeviceOnly` (so it never migrates to another device via a backup)
+/// so a background upload started from the extension can still read it while the screen
+/// is locked (mirrors the Android decision not to require
 /// an unlocked device — see `CredentialStore` notes there).
 ///
-/// Any read failure (item missing, decode failure, OS error) is treated as
-/// "logged out" and clears the slot.
+/// Read failures are told apart, as on Android:
+/// - **permanent** — the blob can never be read again (undecodable / tampered): report,
+///   clear the slot, treat as logged out;
+/// - **transient** — the OS said "not now" (device not yet unlocked, keychain busy): report,
+///   but keep the blob so a later read can succeed. Clearing here would sign the user out
+///   over a hiccup.
 struct KeychainCredentialStore {
     private let service = "com.eeinspired.mantel.credentials"
     private let account = "primary"
@@ -23,19 +28,38 @@ struct KeychainCredentialStore {
         self.accessGroup = accessGroup
     }
 
-    func save(_ credentials: Credentials) {
-        let blob = try? JSONEncoder().encode(
-            CredentialBlob(username: credentials.username, appPassword: credentials.appPassword)
+    /// Returns `false` (after reporting) if the credential could not be stored, so the
+    /// caller doesn't tell the user they're signed in when the next launch would find nothing.
+    @discardableResult
+    func save(_ credentials: Credentials) -> Bool {
+        let blob = CredentialBlob(
+            username: credentials.username,
+            appPassword: credentials.appPassword,
+            userId: credentials.userId
         )
-        guard let data = blob else { return }
+        guard let data = try? JSONEncoder().encode(blob) else { return false }
 
-        let delete = baseQuery()
-        SecItemDelete(delete as CFDictionary)
-
-        var add = baseQuery()
-        add[kSecValueData as String] = data
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        SecItemAdd(add as CFDictionary, nil)
+        // Update in place when the item exists (never a window with no credential stored),
+        // add it otherwise. The attributes also migrate items written with the older,
+        // backup-portable accessibility class.
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        var status = SecItemUpdate(baseQuery() as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            status = SecItemAdd(baseQuery().merging(attributes) { $1 } as CFDictionary, nil)
+        }
+        guard status == errSecSuccess else {
+            Telemetry.shared.recordNonFatal(
+                NSError(domain: "CredentialStore", code: Int(status), userInfo: [
+                    NSLocalizedDescriptionKey: "credential save failed (OSStatus \(status))",
+                ]),
+                context: "credential_store"
+            )
+            return false
+        }
+        return true
     }
 
     func load() -> Credentials? {
@@ -45,18 +69,54 @@ struct KeychainCredentialStore {
 
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let blob = try? JSONDecoder().decode(CredentialBlob.self, from: data)
-        else {
-            if status != errSecItemNotFound { clear() }
+        switch status {
+        case errSecSuccess:
+            break
+        case errSecItemNotFound:
+            return nil
+        default:
+            transientFailure(status)
             return nil
         }
-        return Credentials(username: blob.username, appPassword: blob.appPassword)
+        guard let data = result as? Data,
+              let blob = try? JSONDecoder().decode(CredentialBlob.self, from: data)
+        else {
+            permanentFailure()
+            return nil
+        }
+        // Blobs written before `userId` existed fall back to the login name.
+        return Credentials(
+            username: blob.username,
+            appPassword: blob.appPassword,
+            userId: blob.userId.flatMap { $0.isEmpty ? nil : $0 }
+        )
     }
 
     func clear() {
         SecItemDelete(baseQuery() as CFDictionary)
+    }
+
+    /// The stored blob can never be read again — report it and start over signed out.
+    private func permanentFailure() {
+        Telemetry.shared.setKey("credential_failure", "permanent")
+        Telemetry.shared.recordNonFatal(
+            NSError(domain: "CredentialStore", code: 0, userInfo: [
+                NSLocalizedDescriptionKey: "credentials unreadable, cleared",
+            ]),
+            context: "credential_store"
+        )
+        clear()
+    }
+
+    /// Keychain hiccup (locked, busy): report, but keep the blob so the next read can retry.
+    private func transientFailure(_ status: OSStatus) {
+        Telemetry.shared.setKey("credential_failure", "transient:\(status)")
+        Telemetry.shared.recordNonFatal(
+            NSError(domain: "CredentialStore", code: Int(status), userInfo: [
+                NSLocalizedDescriptionKey: "credential read failed, kept (OSStatus \(status))",
+            ]),
+            context: "credential_store"
+        )
     }
 
     private func baseQuery() -> [String: Any] {
@@ -72,13 +132,16 @@ struct KeychainCredentialStore {
     }
 }
 
-/// Compact on-disk shape: single-letter JSON keys keep the encrypted blob small.
+/// Compact on-disk shape: single-letter JSON keys keep the blob small.
 private struct CredentialBlob: Codable {
     let username: String
     let appPassword: String
+    /// Absent in blobs written before the server uid was stored.
+    let userId: String?
 
     enum CodingKeys: String, CodingKey {
         case username = "u"
         case appPassword = "p"
+        case userId = "i"
     }
 }

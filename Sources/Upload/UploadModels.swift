@@ -40,8 +40,11 @@ struct UploadRecord: Codable, Identifiable, Equatable {
     let displayName: String
     let destinationLabel: String
     let mimeType: String
-    /// Fully-qualified, percent-encoded destination file URL.
-    let finalURL: String
+    /// Server origin this upload is pinned to, so staging and the final `MOVE` stay on one
+    /// host for the life of the upload even if the configured base URL changes later.
+    let baseURL: String
+    /// Fully-qualified, percent-encoded URL of the destination folder.
+    let collectionURL: String
     /// Absolute path of the staged source file in the shared container.
     let stagedPath: String
     let sizeBytes: Int64
@@ -50,8 +53,10 @@ struct UploadRecord: Codable, Identifiable, Equatable {
     let createdAt: Date
 
     var state: UploadState
-    var errorKind: String?
+    var errorKind: UploadError?
     var attempt: Int
+    /// How many times a name clash renamed this file (`IMG (1).jpg`, `IMG (2).jpg`, …).
+    var nameIndex: Int
 
     // Chunked-only bookkeeping.
     var uploadID: String?
@@ -64,7 +69,8 @@ struct UploadRecord: Codable, Identifiable, Equatable {
         displayName: String,
         destinationLabel: String,
         mimeType: String,
-        finalURL: String,
+        baseURL: String,
+        collectionURL: String,
         stagedPath: String,
         sizeBytes: Int64,
         mtimeEpochSeconds: Int64?,
@@ -75,7 +81,8 @@ struct UploadRecord: Codable, Identifiable, Equatable {
         self.displayName = displayName
         self.destinationLabel = destinationLabel
         self.mimeType = mimeType
-        self.finalURL = finalURL
+        self.baseURL = baseURL
+        self.collectionURL = collectionURL
         self.stagedPath = stagedPath
         self.sizeBytes = sizeBytes
         self.mtimeEpochSeconds = mtimeEpochSeconds
@@ -83,11 +90,45 @@ struct UploadRecord: Codable, Identifiable, Equatable {
         createdAt = Date()
         state = .waiting
         attempt = 0
+        nameIndex = 0
         totalChunks = 0
         completedChunks = []
     }
 
+    /// Bookkeeping fields fall back to defaults, so a record written by an older build
+    /// (before a field existed) still decodes instead of being dropped.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        batchID = try container.decode(String.self, forKey: .batchID)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        destinationLabel = try container.decode(String.self, forKey: .destinationLabel)
+        mimeType = try container.decode(String.self, forKey: .mimeType)
+        baseURL = try container.decode(String.self, forKey: .baseURL)
+        collectionURL = try container.decode(String.self, forKey: .collectionURL)
+        stagedPath = try container.decode(String.self, forKey: .stagedPath)
+        sizeBytes = try container.decode(Int64.self, forKey: .sizeBytes)
+        mtimeEpochSeconds = try container.decodeIfPresent(Int64.self, forKey: .mtimeEpochSeconds)
+        mode = try container.decode(UploadMode.self, forKey: .mode)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        state = try container.decodeIfPresent(UploadState.self, forKey: .state) ?? .waiting
+        errorKind = try container.decodeIfPresent(UploadError.self, forKey: .errorKind)
+        attempt = try container.decodeIfPresent(Int.self, forKey: .attempt) ?? 0
+        nameIndex = try container.decodeIfPresent(Int.self, forKey: .nameIndex) ?? 0
+        uploadID = try container.decodeIfPresent(String.self, forKey: .uploadID)
+        totalChunks = try container.decodeIfPresent(Int.self, forKey: .totalChunks) ?? 0
+        completedChunks = try container.decodeIfPresent(Set<Int>.self, forKey: .completedChunks) ?? []
+    }
+
     var isFinished: Bool { state == .succeeded || state == .failed }
+
+    /// The name this attempt uploads as — `displayName`, numbered after a name clash.
+    var remoteName: String { RemoteNames.numbered(displayName, nameIndex) }
+
+    /// Fully-qualified, percent-encoded destination file URL for the current `nameIndex`.
+    var finalURL: URL? {
+        URL(string: collectionURL)?.appendingPathComponent(remoteName)
+    }
 }
 
 enum UploadTuning {
@@ -100,6 +141,8 @@ enum UploadTuning {
     /// Zero-padded, lexically sortable chunk names (API Contract §4).
     static let chunkNameWidth = 15
     static let maxAttempts = 5
+    /// How many `name (n)` renames to try after a name clash before giving up.
+    static let maxRenames = 9
     /// Client-side sanity cap on a single file.
     static let maxFileBytes: Int64 = 4 * 1024 * 1024 * 1024
 }

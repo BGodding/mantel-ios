@@ -105,27 +105,35 @@ struct ShareRootView: View {
     }
 
     private func send(to frame: Frame) {
-        guard let username = repo.username else { signedIn = false; return }
+        guard let userId = repo.userId else { signedIn = false; return }
         sending = true
         Task {
             let batchID = UUID().uuidString
             var staged: [StagedFile] = []
+            var firstFailure: StagingFailure.Reason?
             for provider in providers {
                 let item = SendableItemProvider(provider: provider)
-                if let file = try? await MediaStaging.stage(item, batchID: batchID) {
-                    staged.append(file)
+                do {
+                    try await staged.append(MediaStaging.stage(item, batchID: batchID))
+                } catch {
+                    firstFailure = firstFailure ?? (error as? StagingFailure)?.reason
                 }
             }
             guard !staged.isEmpty else {
-                notice = "Couldn't read the shared items."
+                notice = Messages.stagingFailure(firstFailure)
                 sending = false
                 return
             }
             repo.lastDestinationID = frame.id
             _ = UploadCoordinator.shared.enqueue(
-                destination: frame, username: username, staged: staged
+                destination: frame, userId: userId, staged: staged
             )
+            // Don't report "sent" (or let the user dismiss us) until `MKCOL` / chunk tasks
+            // exist — an extension torn down before that never starts large files.
+            await UploadCoordinator.shared.waitUntilIdle()
+            let skipped = providers.count - staged.count
             sentMessage = "Sending \(staged.count) to \(frame.displayName)."
+                + (skipped > 0 ? " " + Messages.skippedFiles(skipped) : "")
             sending = false
         }
     }

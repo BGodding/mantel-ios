@@ -21,7 +21,7 @@ settings:
 packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk.git
-    minorVersion: 11.6.0
+    majorVersion: 12.19.0
 
 targets:
   Mantel:

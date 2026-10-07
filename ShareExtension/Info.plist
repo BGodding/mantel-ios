@@ -20,6 +20,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>
@@ -37,5 +39,7 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>MantelKeychainAccessGroup</key>
+	<string>$(AppIdentifierPrefix)com.eeinspired.mantel.shared</string>
 </dict>
 </plist>

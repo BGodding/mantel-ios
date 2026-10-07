@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mantel Support</title>
+<meta name="description" content="Support and common questions for the Mantel iOS app.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%235B4B8A'/%3E%3Cpath d='M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 13.5v-7Z' stroke='white' stroke-width='1.6'/%3E%3Cpath d='M4 13l4-4.5 3 3 3-3.5L20 13' stroke='white' stroke-width='1.6' stroke-linejoin='round'/%3E%3Ccircle cx='15.5' cy='7.5' r='1.15' fill='white'/%3E%3C/svg%3E">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap');
+
+  :root{
+    --paper:#FAF6EF;
+    --paper-raised:#FFFFFF;
+    --ink:#2B2420;
+    --ink-soft:#6B6055;
+    --ink-faint:#948A7C;
+    --accent:#5B4B8A;
+    --accent-warm:#A9762F;
+    --line:#E4DACB;
+    --good:#2F7A5B;
+    --warn:#9C5B2E;
+    --font-display:'Fraunces', 'Iowan Old Style', 'Palatino Linotype', serif;
+    --font-body:'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#18140F; --paper-raised:#211B15; --ink:#EFE7DA; --ink-soft:#B2A594;
+      --ink-faint:#786D5F; --accent:#B4A4E8; --accent-warm:#D2A155; --line:#3A322A;
+      --good:#6FCBA3; --warn:#E3A96B;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#18140F; --paper-raised:#211B15; --ink:#EFE7DA; --ink-soft:#B2A594;
+    --ink-faint:#786D5F; --accent:#B4A4E8; --accent-warm:#D2A155; --line:#3A322A;
+    --good:#6FCBA3; --warn:#E3A96B;
+  }
+
+  *{box-sizing:border-box;}
+  html, body{background:var(--paper);}
+  body{
+    margin:0; color:var(--ink); font-family:var(--font-body);
+    font-size:16px; line-height:1.6; padding-inline:20px; padding-block:56px;
+  }
+  .page{max-width:680px; margin:0 auto;}
+  .frame-rule{
+    height:2px;
+    background:linear-gradient(90deg, transparent, var(--accent-warm) 15%, var(--accent-warm) 85%, transparent);
+    opacity:.55; margin-bottom:28px;
+  }
+  header.masthead{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:8px;}
+  .wordmark{display:flex; align-items:center; gap:10px;}
+  .glyph{width:34px; height:34px; border-radius:9px; background:linear-gradient(135deg, var(--accent) 0%, #7A4FBF 100%); display:flex; align-items:center; justify-content:center; flex:none;}
+  .glyph svg{width:18px;height:18px;display:block;}
+  .wordmark .name{font-family:var(--font-display); font-weight:600; font-size:1.35rem;}
+  .doc-label{font-size:.72rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint);}
+
+  h1{font-family:var(--font-display); font-weight:600; font-size:clamp(1.9rem,5vw,2.5rem); line-height:1.1; letter-spacing:-.01em; text-wrap:balance; margin:18px 0 6px;}
+  .subline{color:var(--ink-soft); font-size:.95rem; margin:0 0 36px;}
+
+  section{margin-bottom:32px;}
+  h2.title{font-family:var(--font-display); font-weight:600; font-size:1.25rem; margin:0 0 12px;}
+  p{margin:0 0 12px; max-width:64ch;}
+  a{color:var(--accent); text-decoration-color:color-mix(in srgb, var(--accent) 40%, transparent);}
+  a:hover{text-decoration-color:var(--accent);}
+  code{font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:.85em; background:var(--paper-raised); border:1px solid var(--line); padding:.1em .4em; border-radius:5px;}
+
+  .qa{background:var(--paper-raised); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin-bottom:12px;}
+  .qa .q{display:flex; gap:10px; align-items:baseline; font-weight:600; margin-bottom:6px;}
+  .qa .q .dot{width:7px;height:7px;border-radius:50%;background:var(--accent-warm);flex:none;margin-bottom:2px;}
+  .qa p{margin:0; color:var(--ink-soft); font-size:.95rem;}
+
+  .card{background:var(--paper-raised); border:1px solid var(--line); border-radius:14px; padding:22px 24px; margin-bottom:36px;}
+  .card h2{font-size:.72rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--accent-warm); margin:0 0 10px; font-family:var(--font-body);}
+  .card p{margin:0 0 14px;}
+  .btn{
+    display:inline-flex; align-items:center; gap:8px; background:var(--accent); color:#fff;
+    padding:10px 18px; border-radius:9px; font-weight:600; font-size:.92rem; text-decoration:none;
+  }
+  .btn:hover{opacity:.92;}
+
+  footer{margin-top:8px; padding-top:22px; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; font-size:.85rem; color:var(--ink-faint);}
+  footer a{color:var(--ink-soft);}
+
+  @media (max-width:480px){ body{padding-inline:16px; padding-block:36px;} .card{padding:18px;} }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="frame-rule"></div>
+
+  <header class="masthead">
+    <div class="wordmark">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 13.5v-7Z" stroke="white" stroke-width="1.6"/><path d="M4 13l4-4.5 3 3 3-3.5L20 13" stroke="white" stroke-width="1.6" stroke-linejoin="round"/><circle cx="15.5" cy="7.5" r="1.15" fill="white"/></svg>
+      </span>
+      <span class="name">Mantel</span>
+    </div>
+    <span class="doc-label">Support</span>
+  </header>
+
+  <h1>Help with Mantel</h1>
+  <p class="subline">Mantel sends photos and videos to a private Nextcloud frame folder set up by your family
+  administrator. Most questions come down to one of these.</p>
+
+  <section>
+    <h2 class="title">Common questions</h2>
+
+    <div class="qa">
+      <div class="q"><span class="dot"></span>"Invalid credentials" when I sign in</div>
+      <p>Use an <strong>app password</strong>, not your regular Nextcloud login password. Ask whoever
+      administers your Nextcloud server to generate one for you under Settings → Security → App passwords.</p>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="dot"></span>I don't see any frames to send photos to</div>
+      <p>Frames are folders your administrator shares with your account, with permission to add files. Ask
+      them to check the share, then pull to refresh the frame list in Mantel.</p>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="dot"></span>A file with this name already exists</div>
+      <p>Mantel never overwrites a file with the same name — this is Nextcloud protecting existing files.
+      Rename the item on your phone, or ask your administrator about the existing copy.</p>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="dot"></span>An upload says "will retry" and doesn't finish</div>
+      <p>Large videos upload in the background and resume automatically once you have a connection — you can
+      close the app and it keeps going. If it's been stuck a long time, check that your phone can reach your
+      Nextcloud server at all (try opening it in Safari).</p>
+    </div>
+
+    <div class="qa">
+      <div class="q"><span class="dot"></span>The photo gallery or delete option isn't showing up</div>
+      <p>Both are optional features your administrator turns on server-side. If you expect to have them,
+      check with your administrator.</p>
+    </div>
+  </section>
+
+  <div class="card">
+    <h2>Still stuck?</h2>
+    <p>Write to us and mention your Nextcloud username (never your password) and what you were trying to do.</p>
+    <a class="btn" href="mailto:support@eeinspired.com">support@eeinspired.com</a>
+  </div>
+
+  <footer>
+    <span>Mantel · a private frame uploader for Nextcloud</span>
+    <span><a href="privacy-policy.html">Privacy Policy</a></span>
+  </footer>
+</div>
+</body>
+</html>

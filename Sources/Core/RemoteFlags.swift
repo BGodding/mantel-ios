@@ -22,7 +22,8 @@ struct FlagSnapshot: Equatable {
 /// - `gallery_enabled` (bool)
 /// - `delete_enabled` (bool)
 /// - `server_base_url` (string) — applied to `Config.remoteOverrideBaseURL` only
-///   when its host passes `Config.isAllowedHost`.
+///   when it passes `Config.isAllowed`, and then cached for the **next** launch — never a
+///   mid-session swap.
 enum RemoteFlags {
     static let keyGalleryEnabled = "gallery_enabled"
     static let keyDeleteEnabled = "delete_enabled"
@@ -49,7 +50,7 @@ enum RemoteFlags {
         config.setDefaults([
             keyGalleryEnabled: false as NSObject,
             keyDeleteEnabled: false as NSObject,
-            keyServerBaseURL: "" as NSObject,
+            keyServerBaseURL: Config.defaultBaseURL.absoluteString as NSObject,
         ])
         let settings = RemoteConfigSettings()
         settings.minimumFetchInterval = minFetchInterval
@@ -57,23 +58,11 @@ enum RemoteFlags {
 
         _ = try? await config.fetchAndActivate()
 
-        applyServerBaseURLOverride(config[keyServerBaseURL].stringValue)
+        Config.applyRemote(config[keyServerBaseURL].stringValue)
 
         return FlagSnapshot(
             galleryEnabled: config[keyGalleryEnabled].boolValue,
             deleteEnabled: config[keyDeleteEnabled].boolValue
         )
-    }
-
-    /// Honour a Remote Config `server_base_url` only when it is a well-formed
-    /// https URL whose host is allowed (`Config.isAllowedHost`).
-    private static func applyServerBaseURLOverride(_ raw: String?) {
-        guard let raw, !raw.isEmpty,
-              let url = URL(string: raw),
-              url.scheme?.lowercased() == "https",
-              let host = url.host,
-              Config.isAllowedHost(host)
-        else { return }
-        Config.remoteOverrideBaseURL = url
     }
 }

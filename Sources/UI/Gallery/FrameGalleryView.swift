@@ -4,7 +4,6 @@ struct FrameGalleryView: View {
     let frame: Frame
     let repo: SessionRepository
     let canDelete: Bool
-    let onOpenItem: (RemoteItem) -> Void
     let onBack: () -> Void
     let onSignedOut: (String) -> Void
 
@@ -15,8 +14,16 @@ struct FrameGalleryView: View {
     @State private var pendingDelete: RemoteItem?
     @State private var deleteBusy = false
     @State private var toast: String?
+    @State private var toastTask: Task<Void, Never>?
+    /// Presented over this view (not swapped in for it), so returning from the viewer keeps
+    /// the scroll position, filter, sort and loaded items — no reload.
+    @State private var viewerItem: RemoteItem?
+    @SceneStorage("gallery.filter") private var filter: MediaFilter = .all
+    @SceneStorage("gallery.sort") private var sort: GallerySort = .recentlyAdded
 
     private let columns = [GridItem(.adaptive(minimum: 110), spacing: 4)]
+
+    private var visibleItems: [RemoteItem] { items.filteredAndSorted(filter, sort) }
 
     var body: some View {
         NavigationStack {
@@ -31,6 +38,20 @@ struct FrameGalleryView: View {
                 }
         }
         .task(id: frame.id) { load() }
+        .fullScreenCover(item: $viewerItem) { item in
+            FrameImageView(
+                frame: frame,
+                item: item,
+                repo: repo,
+                canDelete: canDelete,
+                onDeleted: {
+                    items.removeAll { $0.id == item.id }
+                    viewerItem = nil
+                },
+                onBack: { viewerItem = nil },
+                onSignedOut: onSignedOut
+            )
+        }
         .overlay(alignment: .bottom) {
             if let toast {
                 Text(toast)
@@ -61,36 +82,74 @@ struct FrameGalleryView: View {
                     .padding(.horizontal).padding(.vertical, 8)
             }
             if loadedOnce, !items.isEmpty {
-                Text("\(items.count) \(items.count == 1 ? "item" : "items")"
-                    + (canDelete ? " · long-press to remove" : ""))
-                    .font(.callout).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal).padding(.vertical, 8)
+                filterBar
             }
 
             if loading, items.isEmpty {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if items.isEmpty, loadedOnce {
-                ContentUnavailableView("No photos yet", systemImage: "photo",
-                                       description: Text("This frame has no photos yet."))
+            } else if visibleItems.isEmpty, loadedOnce {
+                ContentUnavailableView(
+                    items.isEmpty ? "No photos yet" : "Nothing here",
+                    systemImage: "photo",
+                    description: Text(items.isEmpty
+                        ? "This frame has no photos yet."
+                        : "Nothing matches this filter.")
+                )
             } else {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 4) {
-                        ForEach(items) { item in
-                            GalleryTile(item: item, credentials: repo.currentCredentials())
-                                .onTapGesture { onOpenItem(item) }
-                                .contextMenu {
-                                    if canDelete {
-                                        Button("Remove from frame", role: .destructive) {
-                                            pendingDelete = item
-                                        }
-                                    }
-                                }
-                        }
+                grid
+            }
+        }
+    }
+
+    private var filterBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Show", selection: $filter) {
+                ForEach(MediaFilter.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+
+            HStack {
+                let count = visibleItems.count
+                Text("\(count) \(count == 1 ? "item" : "items")")
+                    .font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Menu {
+                    Picker("Sort", selection: $sort) {
+                        ForEach(GallerySort.allCases) { Text($0.label).tag($0) }
                     }
-                    .padding(12)
+                } label: {
+                    Label("Sort: \(sort.label)", systemImage: "arrow.up.arrow.down")
+                        .font(.callout)
                 }
             }
+
+            if canDelete {
+                Text("Long-press a photo to remove it")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private var grid: some View {
+        // Read once per render, not once per tile (a signed-out read hits the Keychain).
+        let credentials = repo.currentCredentials()
+        return ScrollView {
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(visibleItems) { item in
+                    GalleryTile(item: item, credentials: credentials)
+                        .onTapGesture { viewerItem = item }
+                        .contextMenu {
+                            if canDelete {
+                                Button("Remove from frame", role: .destructive) {
+                                    pendingDelete = item
+                                }
+                            }
+                        }
+                }
+            }
+            .padding(12)
         }
     }
 
@@ -138,9 +197,12 @@ struct FrameGalleryView: View {
     }
 
     private func showToast(_ message: String) {
+        toastTask?.cancel()
         withAnimation { toast = message }
-        Task {
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
+        // Replaces any earlier timer, so an older toast can't clear a newer one.
+        toastTask = Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
             withAnimation { toast = nil }
         }
     }

@@ -23,10 +23,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchScreen</key>
-	<dict>
-		<key>UIColorName</key>
-		<string></string>
-	</dict>
+	<dict/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -50,5 +47,15 @@
 	  per Requirements §8 "iOS App Transport Security left enabled, no exceptions".
 	  The app talks only to its configured Nextcloud origin over TLS.
 	-->
+	<!--
+	  Export compliance: the app uses only iOS's standard TLS (URLSession) — no
+	  proprietary/non-standard encryption. This is the standard §742.15(b)(1)
+	  exemption, so answer this once here rather than at every App Store Connect
+	  build upload.
+	-->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>MantelKeychainAccessGroup</key>
+	<string>$(AppIdentifierPrefix)com.eeinspired.mantel.shared</string>
 </dict>
 </plist>
