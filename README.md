@@ -43,13 +43,20 @@ differs").
   posture. Flags still come from Firebase so they match Android's delivery model.
 - **Background transfers:** `WorkManager` → background `URLSession` upload tasks.
   Chunk `PUT`s ride the background session; the small `MKCOL` / `MOVE` control
-  requests use a foreground `async` session and are re-driven by `reconcile()` if
-  the app was suspended between the last chunk and assembly.
-- **Share Extension trade-off:** the app and the extension share one background
-  session identifier so whichever process runs next receives the completion
-  events the other missed. Two simultaneously-live sessions with the same id is
-  discouraged by Apple but is low-risk here (the two processes rarely upload at
-  once, and each task stays attached to the session that created it).
+  requests and the chunk splitting run as *tracked work* under a `ProcessInfo`
+  expiring activity, and the system is only told a background wake-up is done once
+  that work has finished. Anything cut short is re-driven by `reconcile()`.
+- **Share Extension:** the app and the extension each own a background session
+  (`Config.appSessionIdentifier` / `extensionSessionIdentifier`), as Apple's
+  app-extension guidance requires. When the extension's uploads finish after it is
+  gone, the system launches the app with the extension's identifier and the app
+  re-attaches to that session. Upload records live in one shared file that both
+  processes update with read-merge-write, so neither overwrites the other's records.
+  **Verify on a device** before each release: share a large video from Photos, force-quit
+  everything, and confirm it still completes and the app shows it as sent.
+- **Revoked session vs. sign-out:** an explicit sign-out wipes queued uploads and staged
+  photos; a server-side revocation keeps them and resumes them after signing back in
+  (unless a different account signs in).
 - **No cross-platform code** — separate codebase, same REST/WebDAV surface (§3).
 
 ## Project layout
@@ -136,6 +143,16 @@ rsvg-convert -w 1024 -h 1024 -o App/Assets.xcassets/AppIcon.appiconset/AppIcon.p
 analyzer (in the build), `gitleaks`, and Dependabot. CI runs the lot
 (`.github/workflows/ci.yml`). Details, config rationale, and deliberate opt-outs
 are in [`docs/static-analysis.md`](docs/static-analysis.md).
+
+## App Store submission
+
+Everything needed to submit — App Store Connect text, the App Privacy worksheet,
+age-rating answers, and screenshots at Apple's required sizes — is in
+[`appstore/metadata.md`](appstore/metadata.md). The Privacy Policy and Support
+pages it links to are served straight from this repo via GitHub Pages:
+[`docs/privacy-policy.html`](docs/privacy-policy.html) and
+[`docs/support.html`](docs/support.html) (enable **Settings → Pages**, source
+`main` / `/docs`, once — see `appstore/metadata.md` for the exact steps).
 
 ## Verified vs. not
 

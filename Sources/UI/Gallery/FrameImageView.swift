@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Full-screen viewer for one gallery item: an image, or a streaming video.
 struct FrameImageView: View {
     let frame: Frame
     let item: RemoteItem
@@ -18,18 +19,22 @@ struct FrameImageView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                AuthedAsyncImage(
-                    url: item.isVideo ? (item.previewURL() ?? item.downloadURL) : item.downloadURL,
-                    credentials: repo.currentCredentials(),
-                    contentMode: .fit
-                ) {
-                    PreviewPendingTile()
+                if item.isVideo {
+                    VideoPlayerView(url: item.downloadURL, credentials: repo.currentCredentials())
+                } else {
+                    AuthedAsyncImage(
+                        url: item.downloadURL,
+                        credentials: repo.currentCredentials(),
+                        contentMode: .fit
+                    ) {
+                        PreviewPendingTile()
+                    }
                 }
 
-                VStack {
-                    Spacer()
-                    if let footer {
-                        Text(footer)
+                if let error {
+                    VStack {
+                        Spacer()
+                        Text(error)
                             .foregroundStyle(.white)
                             .padding(16)
                     }
@@ -55,12 +60,6 @@ struct FrameImageView: View {
             Text("\"\(item.name)\" will be removed from \"\(frame.displayName)\" and moved to the "
                 + "server's trash. Anyone viewing that frame will no longer see it.")
         }
-    }
-
-    private var footer: String? {
-        if let error { return error }
-        if item.isVideo { return "Video — open in Nextcloud to play" }
-        return nil
     }
 
     private func confirmDelete() {

@@ -31,13 +31,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         handleEventsForBackgroundURLSession identifier: String,
         completionHandler: @escaping () -> Void
     ) {
-        guard identifier == Config.backgroundSessionIdentifier else {
+        // The app's own session, or the Share Extension's (its uploads finish after it is gone).
+        guard Config.allSessionIdentifiers.contains(identifier) else {
             completionHandler()
             return
         }
         Task { @MainActor in
-            UploadCoordinator.shared.backgroundCompletionHandler = completionHandler
-            UploadCoordinator.shared.attach()
+            UploadCoordinator.shared.handleBackgroundEvents(identifier: identifier, completion: completionHandler)
         }
     }
 }

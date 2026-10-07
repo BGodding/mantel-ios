@@ -5,6 +5,11 @@ import os
 /// First-party diagnostics: `os_log` signposts/events plus a `MetricKit`
 /// subscriber for crash + performance payloads.
 ///
+/// Nothing here leaves the device. `os_log` output is readable in Console / sysdiagnose,
+/// and MetricKit's crash/hang diagnostics are saved to `Caches/Diagnostics` (the last few
+/// payloads) so they can be attached to a bug report by hand. There is deliberately no
+/// automatic upload.
+///
 /// Requirements §2/§8 barred third-party telemetry SDKs; §13.3 later added
 /// Firebase Crashlytics + Analytics on Android by owner decision. On iOS the
 /// platform already provides the equivalent without a dependency:
@@ -67,6 +72,7 @@ final class Telemetry: NSObject, @unchecked Sendable {
     /// Report a handled error without crashing (e.g. a swallowed upload failure,
     /// an orphaned staging collection, server API-shape drift).
     func recordNonFatal(_ error: Error, context: String = "") {
+        guard collecting else { return }
         let snapshot = keysQueue.sync { keys }
         log.error("""
         nonfatal \(context, privacy: .public) \
@@ -74,11 +80,25 @@ final class Telemetry: NSObject, @unchecked Sendable {
         """)
     }
 
+    /// A parseable-but-unexpected server response (JSON/XML shape drift), surfaced as a
+    /// non-fatal so API changes show up in diagnostics rather than silently degrading
+    /// to "server error". `diagnostics` is an `APIDiagnostics` description — shape
+    /// only, never response content.
+    func recordAPIDrift(_ location: String, _ diagnostics: String) {
+        setKey("drift_detail", String(diagnostics.prefix(1000)))
+        recordNonFatal(
+            NSError(domain: "APIDrift", code: 0, userInfo: [
+                NSLocalizedDescriptionKey: "API drift at \(location)",
+            ]),
+            context: "api_drift"
+        )
+    }
+
     enum Events {
         static let loginSuccess = "login_success"
         static let loginFailure = "login_failure"
         static let sessionRevoked = "session_revoked"
-        static let framesRefresh = "frames_refresh"
+        static let destinationsRefresh = "destinations_refresh"
         static let uploadEnqueued = "upload_enqueued"
         static let uploadResult = "upload_result"
     }
@@ -87,16 +107,36 @@ final class Telemetry: NSObject, @unchecked Sendable {
 extension Telemetry: MXMetricManagerSubscriber {
     func didReceive(_ payloads: [MXMetricPayload]) {
         for payload in payloads {
+            Self.save(payload.jsonRepresentation(), prefix: "metric")
             diagnostics.info("metric payload \(payload.jsonRepresentation().count, privacy: .public) bytes")
         }
     }
 
     func didReceive(_ payloads: [MXDiagnosticPayload]) {
         for payload in payloads {
+            Self.save(payload.jsonRepresentation(), prefix: "diagnostic")
             diagnostics.error("""
             diagnostic payload crashes=\(payload.crashDiagnostics?.count ?? 0, privacy: .public) \
             hangs=\(payload.hangDiagnostics?.count ?? 0, privacy: .public)
             """)
         }
+    }
+}
+
+private extension Telemetry {
+    static let keptPayloads = 10
+
+    /// Writes one MetricKit payload to `Caches/Diagnostics`, dropping the oldest beyond
+    /// `keptPayloads`. The system may clear Caches at any time; these are best-effort.
+    static func save(_ json: Data, prefix: String) {
+        let manager = FileManager.default
+        guard let caches = manager.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+        let directory = caches.appendingPathComponent("Diagnostics", isDirectory: true)
+        try? manager.createDirectory(at: directory, withIntermediateDirectories: true)
+        let stamp = Int(Date().timeIntervalSince1970)
+        try? json.write(to: directory.appendingPathComponent("\(stamp)-\(prefix).json"), options: .atomic)
+        let files = ((try? manager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? [])
+            .sorted { $0.lastPathComponent > $1.lastPathComponent }
+        for stale in files.dropFirst(keptPayloads) { try? manager.removeItem(at: stale) }
     }
 }

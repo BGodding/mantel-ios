@@ -2,6 +2,7 @@ import SwiftUI
 
 struct UploadStatusView: View {
     let batchID: String
+    var skippedCount = 0
     let onDone: () -> Void
 
     @State private var store = UploadCoordinator.shared.store
@@ -18,6 +19,12 @@ struct UploadStatusView: View {
                 Text(summary)
                     .font(.headline)
                     .padding(.horizontal)
+
+                if skippedCount > 0 {
+                    Text(Messages.skippedFiles(skippedCount))
+                        .font(.footnote).foregroundStyle(.red)
+                        .padding(.horizontal)
+                }
 
                 List(records) { record in
                     UploadRow(record: record)

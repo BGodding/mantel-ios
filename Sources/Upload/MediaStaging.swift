@@ -21,77 +21,89 @@ struct SendableItemProvider: @unchecked Sendable {
     let provider: NSItemProvider
 }
 
-enum MediaStaging {
-    enum StagingError: Error {
-        case notLoadable
-        case tooLarge(Int64)
-        case copyFailed
+/// Why a pick couldn't be staged. A fixed vocabulary, safe for telemetry.
+struct StagingFailure: Error {
+    enum Reason: String {
+        case tooLarge = "too_large"
+        case noSpace = "no_space"
+        case unreadable
     }
 
-    private static let maxNameLength = 200
+    let reason: Reason
+}
+
+enum MediaStaging {
+    /// Headroom kept free on the volume beyond the file being copied.
+    private static let freeSpaceMargin: Int64 = 64 * 1024 * 1024
 
     /// Copies one item provider's file into `uploads/<batchID>/` and returns its
     /// metadata. Async because `loadFileRepresentation` is.
+    ///
+    /// The provider's file is only valid inside its callback, so it is copied straight to
+    /// its final staged location there — one copy, not a temp copy followed by another.
     static func stage(_ item: SendableItemProvider, batchID: String) async throws -> StagedFile {
-        let provider = item.provider
-        let (tempURL, suggestedName) = try await loadFile(from: provider)
-        defer { try? FileManager.default.removeItem(at: tempURL) }
+        let suggestedName = item.provider.suggestedName
+        let staged = try await withLoadedFile(from: item.provider) { url -> (URL, String) in
+            let size = fileSize(url)
+            guard size <= UploadTuning.maxFileBytes else { throw StagingFailure(reason: .tooLarge) }
+            guard hasSpace(for: size) else { throw StagingFailure(reason: .noSpace) }
 
-        let size = fileSize(tempURL)
-        guard size <= UploadTuning.maxFileBytes else { throw StagingError.tooLarge(size) }
-
-        let displayName = safeRemoteName(suggestedName ?? tempURL.lastPathComponent)
-        let destination = uniqueDestination(displayName: displayName, batchID: batchID)
-
-        do {
-            try FileManager.default.copyItem(at: tempURL, to: destination)
-        } catch {
-            throw StagingError.copyFailed
+            let ext = url.pathExtension
+            let named = suggestedName.map { ext.isEmpty || $0.hasSuffix(".\(ext)") ? $0 : "\($0).\(ext)" }
+            let displayName = RemoteNames.safe(named ?? url.lastPathComponent)
+            let directory = SharedContainer.batchDir(batchID)
+            let destination = directory.appendingPathComponent(
+                RemoteNames.localFileName(displayName, in: directory)
+            )
+            do {
+                try FileManager.default.copyItem(at: url, to: destination)
+            } catch {
+                try? FileManager.default.removeItem(at: destination)
+                throw StagingFailure(reason: hasSpace(for: 0) ? .unreadable : .noSpace)
+            }
+            return (destination, displayName)
         }
+        let (destination, displayName) = staged
 
-        let mime = mimeType(for: tempURL, fallbackName: displayName)
+        // The copied file's length is the truth; a wrong advertised size makes every
+        // upload attempt fail.
+        let actualSize = fileSize(destination)
+        let mime = mimeType(for: destination, fallbackName: displayName)
         let capture = await captureDate(for: destination, mime: mime)
 
         return StagedFile(
             path: destination.path,
             displayName: displayName,
             mimeType: mime,
-            sizeBytes: fileSize(destination),
+            sizeBytes: actualSize,
             captureEpochSeconds: capture.map { Int64($0.timeIntervalSince1970) }
         )
     }
 
-    static func sweepStale() {
-        SharedContainer.sweepStale()
+    /// Drops stale staging directories that no live upload needs.
+    static func sweepStale(activeBatchIDs: Set<String>) {
+        SharedContainer.sweepStale(activeBatchIDs: activeBatchIDs)
     }
 
     // MARK: - Loading
 
-    private static func loadFile(
-        from provider: NSItemProvider
-    ) async throws -> (url: URL, suggestedName: String?) {
+    /// Runs `body` on the provider's file *inside* the load callback (the URL is valid only
+    /// until the callback returns) and hands back whatever it produced.
+    private static func withLoadedFile<T: Sendable>(
+        from provider: NSItemProvider,
+        _ body: @escaping @Sendable (URL) throws -> T
+    ) async throws -> T {
         let type = preferredType(for: provider)
-        // Pull the only value we need off the non-Sendable provider before the
-        // @Sendable completion closure so it isn't captured across the boundary.
-        let suggestedName = provider.suggestedName
         return try await withCheckedThrowingContinuation { continuation in
             provider.loadFileRepresentation(forTypeIdentifier: type) { url, error in
                 guard let url, error == nil else {
-                    continuation.resume(throwing: error ?? StagingError.notLoadable)
+                    continuation.resume(throwing: StagingFailure(reason: .unreadable))
                     return
                 }
-                // The callback URL is valid only until this closure returns — copy now.
-                let temp = FileManager.default.temporaryDirectory
-                    .appendingPathComponent(UUID().uuidString)
-                    .appendingPathExtension(url.pathExtension)
                 do {
-                    try FileManager.default.copyItem(at: url, to: temp)
-                    let named = suggestedName.map {
-                        url.pathExtension.isEmpty ? $0 : "\($0).\(url.pathExtension)"
-                    } ?? suggestedName
-                    continuation.resume(returning: (temp, named))
+                    try continuation.resume(returning: body(url))
                 } catch {
-                    continuation.resume(throwing: StagingError.copyFailed)
+                    continuation.resume(throwing: error)
                 }
             }
         }
@@ -103,6 +115,17 @@ enum MediaStaging {
         return match?.identifier
             ?? provider.registeredTypeIdentifiers.first
             ?? UTType.data.identifier
+    }
+
+    /// Whether `needed` bytes (plus a safety margin) can be written to the shared container's
+    /// volume. Uses the "important usage" figure, which counts purgeable space the system
+    /// will reclaim. Unknown means "assume yes".
+    private static func hasSpace(for needed: Int64) -> Bool {
+        let values = try? SharedContainer.root.resourceValues(
+            forKeys: [.volumeAvailableCapacityForImportantUsageKey]
+        )
+        guard let available = values?.volumeAvailableCapacityForImportantUsage else { return true }
+        return available >= needed + freeSpaceMargin
     }
 
     // MARK: - Metadata
@@ -165,40 +188,5 @@ enum MediaStaging {
 
     private static func fileSize(_ url: URL) -> Int64 {
         Int64((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
-    }
-
-    // MARK: - Name safety
-
-    /// Name used for the WebDAV path. Keeps the human-readable filename but strips
-    /// anything that could alter the path: directory separators, leading dots
-    /// (`.` / `..`), control characters. Length-capped, with a generated fallback.
-    private static func safeRemoteName(_ raw: String) -> String {
-        let lastSegment = raw
-            .split(whereSeparator: { $0 == "/" || $0 == "\\" })
-            .last.map(String.init) ?? raw
-        var cleaned = String(lastSegment.unicodeScalars.filter { scalar in
-            scalar.value >= 0x20 && scalar.value != 0x7F
-        })
-        while let first = cleaned.first, first == "." || first == " " {
-            cleaned.removeFirst()
-        }
-        cleaned = String(cleaned.prefix(maxNameLength))
-            .trimmingCharacters(in: .whitespaces)
-        return cleaned.isEmpty ? "upload_\(Int(Date().timeIntervalSince1970))" : cleaned
-    }
-
-    private static func uniqueDestination(displayName: String, batchID: String) -> URL {
-        let dir = SharedContainer.batchDir(batchID)
-        let sanitised = String(displayName.map { char in
-            char.isLetter || char.isNumber || char == "." || char == "_" || char == "-" ? char : "_"
-        })
-        let local = sanitised.isEmpty ? "upload" : sanitised
-        var candidate = dir.appendingPathComponent(local)
-        if !FileManager.default.fileExists(atPath: candidate.path) { return candidate }
-        let stem = (local as NSString).deletingPathExtension
-        let ext = (local as NSString).pathExtension
-        let suffixed = "\(stem)_\(Int(Date().timeIntervalSince1970 * 1000))"
-        candidate = dir.appendingPathComponent(ext.isEmpty ? suffixed : "\(suffixed).\(ext)")
-        return candidate
     }
 }

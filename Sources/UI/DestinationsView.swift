@@ -6,6 +6,7 @@ struct DestinationsView: View {
     let initialNotice: String?
     let browsingEnabled: Bool
     let onChoosePhotos: () -> Void
+    let onCancelPicking: () -> Void
     let onDestinationPicked: (Frame) -> Void
     let onOpenFrame: (Frame) -> Void
     let onSignedOut: (String) -> Void
@@ -27,7 +28,11 @@ struct DestinationsView: View {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Refresh", action: refresh).disabled(loading)
                     }
-                    if !picking {
+                    if picking {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Cancel", action: onCancelPicking)
+                        }
+                    } else {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button("Sign out") {
                                 repo.logOut()

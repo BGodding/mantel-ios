@@ -14,8 +14,8 @@ let package = Package(
     name: "MantelDependencies",
     platforms: [.iOS(.v17)],
     dependencies: [
-        // Matches `packages.Firebase.minorVersion` in project.yml (~> 11.6).
-        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", "11.6.0" ..< "11.7.0"),
+        // Matches `packages.Firebase.majorVersion` in project.yml (from 12.19.0).
+        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", from: "12.19.0"),
     ],
     targets: []
 )

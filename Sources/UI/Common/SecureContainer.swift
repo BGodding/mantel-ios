@@ -19,7 +19,8 @@ struct SecureContainer<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     @Environment(\.scenePhase) private var scenePhase
-    @State private var captured = SecureContainer.anyScreenCaptured()
+    /// `nil` until the first check, which counts as hidden — never a frame of exposed content.
+    @State private var captured: Bool?
 
     var body: some View {
         content()
@@ -34,6 +35,7 @@ struct SecureContainer<Content: View>: View {
                     .ignoresSafeArea()
                 }
             }
+            .onAppear { captured = SecureContainer.anyScreenCaptured() }
             .onReceive(NotificationCenter.default.publisher(
                 for: UIScreen.capturedDidChangeNotification
             )) { _ in
@@ -42,7 +44,7 @@ struct SecureContainer<Content: View>: View {
     }
 
     private var shouldHide: Bool {
-        captured || scenePhase != .active
+        captured ?? true || scenePhase != .active
     }
 
     /// `true` if any connected window scene's screen is being captured (recording,
